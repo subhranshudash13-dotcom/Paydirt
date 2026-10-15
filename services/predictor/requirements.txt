@@ -1,0 +1,8 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+# Optional, real prediction path (needs TABPFN_TOKEN; Prior Labs non-commercial key):
+tabpfn-client>=0.2.0
+# Baselines for eval only (kept optional so the sidecar runs without them):
+scikit-learn>=1.5.0
+numpy>=1.26.0
