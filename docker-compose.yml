@@ -1,0 +1,64 @@
+# Paydirt local stack — `make up` brings this up from a clean clone.
+# Services: Postgres/Tiger Data (Timescale + pgvector), Ollama (local Gemma),
+# Temporal (durable orchestration). The API/worker/web run via `make dev*`.
+services:
+  db:
+    # timescaledb-ha bundles TimescaleDB, pgvector, postgres extensions.
+    # This is the local stand-in for Tiger Data (Timescale + pgvector).
+    image: timescale/timescaledb-ha:pg16
+    container_name: paydirt-db
+    environment:
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger
+      POSTGRES_DB: quarry
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger -d quarry"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: paydirt-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    # After `make up`, run `make models` to pull gemma3 + embeddinggemma.
+
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: paydirt-temporal
+    depends_on:
+      - db
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=ledger
+      - POSTGRES_PWD=ledger
+      - POSTGRES_SEEDS=db
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    ports:
+      - "7233:7233"
+    volumes:
+      - ./temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: paydirt-temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    ports:
+      - "8233:8080"
+
+volumes:
+  dbdata:
+  ollama:

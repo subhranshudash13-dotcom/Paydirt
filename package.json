@@ -1,0 +1,32 @@
+{
+  "name": "paydirt",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Paydirt — turn open source into paydirt. Discover, score, and track paid open-source bounties with an open-weight AI agent.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/api",
+    "apps/worker",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @paydirt/api",
+    "dev:web": "npm run dev -w @paydirt/web",
+    "dev:worker": "npm run dev -w @paydirt/worker",
+    "build": "npm run build -w @paydirt/shared && npm run build -w @paydirt/api && npm run build -w @paydirt/worker && npm run build -w @paydirt/web",
+    "typecheck": "tsc -b packages/shared apps/api apps/worker",
+    "test": "npm run test -w @paydirt/shared --if-present",
+    "lint": "eslint .",
+    "db:migrate": "node apps/api/dist/db/migrate.js || tsx apps/api/src/db/migrate.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
