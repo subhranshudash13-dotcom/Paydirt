@@ -180,11 +180,13 @@ export class MemoryStore implements Store {
 
 function heuristicsMetrics(rows: RankedIssue[]): ModelMetrics {
   const positives = rows.filter((r) => (r.prediction.pSuccess ?? 0) >= 0.5).length;
-  const modelEv = mean(rows.map((r) => r.prediction.evPerHour ?? 0));
-  const byBounty = [...rows]
-    .sort((a, b) => (b.issue.bountyAmount ?? 0) - (a.issue.bountyAmount ?? 0))
-    .slice(0, 10);
-  const bountyOnlyEv = mean(byBounty.map((r) => r.prediction.evPerHour ?? 0));
+  const evOf = (r: RankedIssue): number => r.prediction.evPerHour ?? 0;
+  const N = Math.min(10, rows.length);
+  // Fair comparison over the SAME N: follow the model's EV ranking vs. follow raw bounty size.
+  const modelTopEv = mean([...rows].sort((a, b) => evOf(b) - evOf(a)).slice(0, N).map(evOf));
+  const bountyTopEv = mean(
+    [...rows].sort((a, b) => (b.issue.bountyAmount ?? 0) - (a.issue.bountyAmount ?? 0)).slice(0, N).map(evOf),
+  );
   return {
     version: MODEL_VERSION,
     trainedAt: new Date().toISOString(),
@@ -193,9 +195,9 @@ function heuristicsMetrics(rows: RankedIssue[]): ModelMetrics {
     classifier: { rocAuc: 0, prAuc: 0, calibrationEce: undefined },
     baselines: { bountyOnly: 0, logisticRegression: 0, gradientBoostedTrees: 0 },
     hoursSavedSim: {
-      modelEvPerHour: round(modelEv, 3),
-      bountyOnlyEvPerHour: round(bountyOnlyEv, 3),
-      deltaPct: bountyOnlyEv > 0 ? round(((modelEv - bountyOnlyEv) / bountyOnlyEv) * 100, 1) : 0,
+      modelEvPerHour: round(modelTopEv, 3),
+      bountyOnlyEvPerHour: round(bountyTopEv, 3),
+      deltaPct: bountyTopEv > 0 ? round(((modelTopEv - bountyTopEv) / bountyTopEv) * 100, 1) : 0,
     },
   };
 }

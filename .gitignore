@@ -27,6 +27,9 @@ data/
 coverage/
 .vite/
 
+# Screenshots dropped at repo root during verification
+/*.png
+
 # OS / editor
 .DS_Store
 Thumbs.db
