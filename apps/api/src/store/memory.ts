@@ -15,9 +15,11 @@ import { score } from "../scoring.js";
 import { featuresFromSeed, SEED, type SeedRecord } from "../seed/data.js";
 import type { MatchResolver } from "../profile.js";
 import type { Store } from "./types.js";
+import type { Predictor, SidecarPrediction } from "../live/predictor.js";
 
-const MODEL_VERSION = "heuristic-v1";
+const HEURISTIC_VERSION = "heuristic-v1";
 const NEUTRAL_MATCH = 0.5; // used until a profile is ingested (Loop 7)
+const PREDICTOR_TTL_MS = 15_000; // batch one sidecar call per window, not per request
 
 interface Row {
   issue: Issue;
@@ -59,7 +61,22 @@ function buildRow(s: SeedRecord, id: number, repoId: number): Row {
   return { issue, repo, features };
 }
 
+/** Assign stable per-board repo ids from a record set (used for seed + live). */
+function buildRows(records: SeedRecord[]): Row[] {
+  const repoIds = new Map<string, number>();
+  const rid = (fn: string): number => {
+    let v = repoIds.get(fn);
+    if (!v) {
+      v = repoIds.size + 1;
+      repoIds.set(fn, v);
+    }
+    return v;
+  };
+  return records.map((s, i) => buildRow(s, i + 1, rid(s.fullName)));
+}
+
 const round = (x: number, p: number): number => Math.round(x * 10 ** p) / 10 ** p;
+const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
 export class MemoryStore implements Store {
   readonly driver = "memory" as const;
@@ -67,26 +84,56 @@ export class MemoryStore implements Store {
   private tracked: TrackedItem[] = [];
   private trackedSeq = 1;
   private matcher: MatchResolver | null = null;
+  private predictor: Predictor | null = null;
+  private predCache: { at: number; map: Map<string, SidecarPrediction> | null } | null = null;
+  private source: "live-github" | "seed" = "seed";
+  private lastModelVersion = HEURISTIC_VERSION;
 
   constructor() {
-    const repoIds = new Map<string, number>();
-    const rid = (fn: string): number => {
-      let v = repoIds.get(fn);
-      if (!v) {
-        v = repoIds.size + 1;
-        repoIds.set(fn, v);
-      }
-      return v;
-    };
-    this.baseRows = SEED.map((s, i) => buildRow(s, i + 1, rid(s.fullName)));
+    this.baseRows = buildRows(SEED);
+  }
+
+  get dataSource(): "live-github" | "seed" {
+    return this.source;
+  }
+  get modelVersion(): string {
+    return this.lastModelVersion;
+  }
+  get rowCount(): number {
+    return this.baseRows.length;
   }
 
   attachMatcher(m: MatchResolver | null): void {
     this.matcher = m;
   }
 
-  /** Compute a ranked row, folding the real match_score into EV via scoring. */
-  private rankedOf(row: Row): RankedIssue {
+  /** Attach the TabPFN/logistic sidecar client so predictions become model-served. */
+  attachPredictor(fn: Predictor | null): void {
+    this.predictor = fn;
+    this.predCache = null;
+    this.lastModelVersion = HEURISTIC_VERSION;
+  }
+
+  /** Swap the board's underlying records for real, live GitHub data. */
+  reloadSeed(records: SeedRecord[], source: "live-github" | "seed"): void {
+    this.baseRows = buildRows(records);
+    this.source = source;
+    this.predCache = null; // ids changed → drop stale predictions
+  }
+
+  /** Batched sidecar predictions over the whole row set (short TTL cache). */
+  private async predictions(): Promise<Map<string, SidecarPrediction> | null> {
+    if (!this.predictor) return null;
+    if (this.predCache && Date.now() - this.predCache.at < PREDICTOR_TTL_MS) return this.predCache.map;
+    const rows = this.baseRows.map((r) => ({ ref: String(r.issue.id), features: r.features }));
+    const map = await this.predictor(rows);
+    this.predCache = { at: Date.now(), map };
+    this.lastModelVersion = map && map.size ? [...map.values()][0]!.modelVersion : HEURISTIC_VERSION;
+    return map;
+  }
+
+  /** Compute a ranked row: real match_score + sidecar-served p/days when available. */
+  private rankedOf(row: Row, pred: SidecarPrediction | null): RankedIssue {
     const m = this.matcher?.({
       language: row.repo.language,
       title: row.issue.title,
@@ -94,34 +141,34 @@ export class MemoryStore implements Store {
       labels: row.issue.labels,
     });
     const matchScore = m?.score ?? NEUTRAL_MATCH;
-    const out = score({ ...row.features, matchScore });
+    const base = score({ ...row.features, matchScore });
+    const pSuccess = pred?.pSuccess ?? base.pSuccess;
+    const daysToMergeEst = pred?.daysToMergeEst ?? base.daysToMergeEst;
+    const bounty = row.features.bountyAmount ?? 0;
+    const evPerHour = (pSuccess * bounty * (0.5 + 0.5 * clamp01(matchScore))) / base.estHours;
     return {
       issue: row.issue,
       repo: row.repo,
       prediction: {
         issueId: row.issue.id,
-        modelVersion: MODEL_VERSION,
-        pSuccess: round(out.pSuccess, 4),
-        daysToMergeEst: round(out.daysToMergeEst, 2),
-        evPerHour: round(out.evPerHour, 4),
+        modelVersion: pred?.modelVersion ?? HEURISTIC_VERSION,
+        pSuccess: round(pSuccess, 4),
+        daysToMergeEst: round(daysToMergeEst, 2),
+        evPerHour: round(evPerHour, 4),
         matchScore: round(matchScore, 4),
-        estHours: round(out.estHours, 2),
+        estHours: round(base.estHours, 2),
         features: row.features,
       },
     };
   }
 
-  private allRanked(): RankedIssue[] {
-    return this.baseRows.map((r) => this.rankedOf(r));
-  }
-
-  private byId(id: number): RankedIssue | undefined {
-    const base = this.baseRows.find((r) => r.issue.id === id);
-    return base ? this.rankedOf(base) : undefined;
+  private async allRanked(): Promise<RankedIssue[]> {
+    const map = await this.predictions();
+    return this.baseRows.map((r) => this.rankedOf(r, map?.get(String(r.issue.id)) ?? null));
   }
 
   async listBoard(q: BoardQuery): Promise<RankedIssue[]> {
-    let rows = this.allRanked();
+    let rows = await this.allRanked();
     if (q.language) rows = rows.filter((r) => r.repo.language?.toLowerCase() === q.language?.toLowerCase());
     if (q.minEv != null) rows = rows.filter((r) => (r.prediction.evPerHour ?? 0) >= q.minEv!);
     const key = q.sort ?? "ev";
@@ -141,12 +188,14 @@ export class MemoryStore implements Store {
   }
 
   async getIssue(id: number): Promise<RankedIssue | null> {
-    return this.byId(id) ?? null;
+    const rows = await this.allRanked();
+    return rows.find((r) => r.issue.id === id) ?? null;
   }
 
   async search(query: string, k: number): Promise<RankedIssue[]> {
     const toks = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const scored = this.allRanked()
+    const all = await this.allRanked();
+    const scored = all
       .map((r) => {
         const hay = `${r.issue.title} ${r.issue.body ?? ""} ${r.repo.fullName} ${r.issue.labels.join(" ")}`.toLowerCase();
         const hits = toks.reduce((n, t) => n + (hay.includes(t) ? 1 : 0), 0);
@@ -158,11 +207,16 @@ export class MemoryStore implements Store {
   }
 
   async listTracked(): Promise<TrackedItem[]> {
-    return this.tracked.map((t) => ({ ...t, issue: this.byId(t.issueId)?.issue ?? null }));
+    const out: TrackedItem[] = [];
+    for (const t of this.tracked) {
+      const found = await this.getIssue(t.issueId);
+      out.push({ ...t, issue: found?.issue ?? null });
+    }
+    return out;
   }
 
   async createTrack(issueId: number): Promise<TrackedItem | null> {
-    if (!this.byId(issueId)) return null;
+    if (!(await this.getIssue(issueId))) return null;
     const item: TrackedItem = {
       id: this.trackedSeq++,
       issueId,
@@ -193,11 +247,11 @@ export class MemoryStore implements Store {
   }
 
   async getModelMetrics(): Promise<ModelMetrics> {
-    return heuristicsMetrics(this.allRanked());
+    return modelMetrics(await this.allRanked(), this.lastModelVersion);
   }
 }
 
-function heuristicsMetrics(rows: RankedIssue[]): ModelMetrics {
+function modelMetrics(rows: RankedIssue[], version: string): ModelMetrics {
   const positives = rows.filter((r) => (r.prediction.pSuccess ?? 0) >= 0.5).length;
   const evOf = (r: RankedIssue): number => r.prediction.evPerHour ?? 0;
   const N = Math.min(10, rows.length);
@@ -207,7 +261,7 @@ function heuristicsMetrics(rows: RankedIssue[]): ModelMetrics {
     [...rows].sort((a, b) => (b.issue.bountyAmount ?? 0) - (a.issue.bountyAmount ?? 0)).slice(0, N).map(evOf),
   );
   return {
-    version: MODEL_VERSION,
+    version,
     trainedAt: new Date().toISOString(),
     rows: rows.length,
     positiveRate: rows.length ? positives / rows.length : 0,

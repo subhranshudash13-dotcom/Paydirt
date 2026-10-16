@@ -195,6 +195,9 @@ export const HealthResponse = z.object({
   predictor: z.boolean(),
   ollama: z.boolean(),
   sentry: z.boolean().default(false),
+  dataSource: z.enum(["live-github", "seed", "postgres"]).default("seed"),
+  modelVersion: z.string().default("heuristic-v1"),
+  issueCount: z.number().default(0),
   version: z.string(),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;

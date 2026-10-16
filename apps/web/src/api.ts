@@ -60,4 +60,5 @@ export const api = {
   profile: () => getJSON<ProfileState>("/api/profile"),
   ingest: (githubLogin: string) => postJSON<IngestResult>("/api/profile/ingest", { githubLogin }),
   draftPlan: (issueId: number) => postJSON<Draft>("/api/drafts/plan", { issueId }),
+  refresh: () => postJSON<{ source: string; modelVersion: string; count: number }>("/api/refresh", {}),
 };

@@ -26,8 +26,12 @@ export function Board({ onSelect, search }: { onSelect: (id: number) => void; se
   const [minEv, setMinEv] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [feed, setFeed] = useState<{ source: string; modelVersion: string } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [nonce, setNonce] = useState(0);
 
   const langs = Array.from(new Set(rows.map((r) => r.repo.language).filter(Boolean))) as string[];
+  const totalBounty = rows.reduce((s, r) => s + (r.issue.bountyAmount ?? 0), 0);
 
   useEffect(() => {
     let alive = true;
@@ -38,7 +42,11 @@ export function Board({ onSelect, search }: { onSelect: (id: number) => void; se
         const data = search.trim()
           ? await api.search(search.trim())
           : await api.issues({ sort, language: lang || undefined, minEv: minEv ? Number(minEv) : undefined, limit: 100 });
-        if (alive) setRows(data);
+        const h = await api.health().catch(() => null);
+        if (alive) {
+          setRows(data);
+          if (h) setFeed({ source: h.dataSource, modelVersion: h.modelVersion });
+        }
       } catch (e) {
         if (alive) setError((e as Error).message);
       } finally {
@@ -49,10 +57,43 @@ export function Board({ onSelect, search }: { onSelect: (id: number) => void; se
     return () => {
       alive = false;
     };
-  }, [sort, lang, minEv, search]);
+  }, [sort, lang, minEv, search, nonce]);
+
+  const refreshLive = async (): Promise<void> => {
+    setRefreshing(true);
+    try {
+      await api.refresh(); // re-runs the live GitHub feed + sidecar on the server
+      setNonce((n) => n + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-semibold text-slate-200">{rows.length} bounties</span>
+          <span className="text-slate-600">·</span>
+          <span className="text-slate-300">{money(totalBounty)} live bounty value</span>
+          {feed && <SourceChip source={feed.source} />}
+          {feed && (
+            <span className="chip bg-sky-500/15 text-sky-300" title="p_success / days-to-merge served by this model">
+              model · {feed.modelVersion}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={refreshLive}
+          disabled={refreshing}
+          className="chip border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
+        >
+          {refreshing ? "Fetching live…" : "↻ Refresh live"}
+        </button>
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/20 p-1">
           {SORTS.map((s) => (
@@ -123,4 +164,14 @@ export function Board({ onSelect, search }: { onSelect: (id: number) => void; se
       <p className="mt-3 text-xs text-slate-500">Sorted by {SORTS.find((s) => s.key === sort)?.label}. EV/hr = P(paid) × bounty ÷ est_hours × (0.5 + 0.5 × match).</p>
     </div>
   );
+}
+
+function SourceChip({ source }: { source: string }): JSX.Element {
+  const map: Record<string, { tone: string; label: string }> = {
+    "live-github": { tone: "bg-emerald-500/15 text-emerald-300", label: "● live GitHub data" },
+    postgres: { tone: "bg-emerald-500/15 text-emerald-300", label: "Tiger Data (Postgres)" },
+    seed: { tone: "bg-amber-500/15 text-amber-300", label: "demo seed (GitHub rate-limited/offline)" },
+  };
+  const s = map[source] ?? { tone: "bg-slate-500/15 text-slate-300", label: source };
+  return <span className={`chip ${s.tone}`}>{s.label}</span>;
 }

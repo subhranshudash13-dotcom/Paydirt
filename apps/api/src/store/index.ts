@@ -1,11 +1,13 @@
 import { MemoryStore } from "./memory.js";
 import { PostgresStore } from "./postgres.js";
 import { probeDb, type DbProbe } from "../db/index.js";
+import type { FeedStatus } from "../live/hydrate.js";
 import type { Store } from "./types.js";
 
 export interface StoreHandle {
   store: Store;
   probe: DbProbe;
+  feed?: FeedStatus; // set at startup / on /api/refresh; reflects the live board feed
 }
 
 /**

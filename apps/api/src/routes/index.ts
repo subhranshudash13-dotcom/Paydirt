@@ -7,6 +7,7 @@ import { config } from "../config.js";
 import type { StoreHandle } from "../store/index.js";
 import { httpOk, tcpOk } from "../probes.js";
 import { sentryEnabled } from "../sentry.js";
+import { hydrate } from "../live/hydrate.js";
 import * as profile from "../profile.js";
 import { planDraft } from "../drafts.js";
 
@@ -19,6 +20,11 @@ export async function registerRoutes(app: FastifyInstance, handle: StoreHandle):
       httpOk(`${config.ollamaUrl}/api/tags`),
       tcpOk(config.temporalAddress.split(":")[0] ?? "localhost", Number(config.temporalAddress.split(":")[1] ?? 7233)),
     ]);
+    const feed = handle.feed ?? {
+      source: probe.connected ? "postgres" as const : "seed" as const,
+      modelVersion: "heuristic-v1",
+      count: 0,
+    };
     return {
       ok: true,
       db: probe.connected ? "postgres" : "memory",
@@ -26,8 +32,18 @@ export async function registerRoutes(app: FastifyInstance, handle: StoreHandle):
       predictor,
       ollama,
       sentry: sentryEnabled(),
+      dataSource: feed.source,
+      modelVersion: feed.modelVersion,
+      issueCount: feed.count,
       version: config.version,
     };
+  });
+
+  // Re-run the live feed (one GitHub search + predictor attach). The board becomes
+  // real data without a restart; on rate-limit/offline it degrades to seed+heuristic.
+  app.post("/api/refresh", async () => {
+    handle.feed = await hydrate(store);
+    return handle.feed;
   });
 
   app.get("/api/issues", async (req): Promise<RankedIssue[]> => {

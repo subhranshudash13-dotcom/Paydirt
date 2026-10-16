@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { HealthResponse } from "@paydirt/shared";
 import { api } from "./api";
+import Landing from "./pages/Landing";
 import { Board } from "./components/Board";
 import { Detail } from "./components/Detail";
 import { Tracker } from "./components/Tracker";
@@ -19,6 +20,7 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export function App(): JSX.Element {
+  const [view, setView] = useState<"landing" | "dashboard">("landing");
   const [tab, setTab] = useState<Tab>("board");
   const [selected, setSelected] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -31,11 +33,15 @@ export function App(): JSX.Element {
     return () => clearInterval(id);
   }, []);
 
+  if (view === "landing") {
+    return <Landing onEnter={() => setView("dashboard")} />;
+  }
+
   return (
     <div className="min-h-full">
       <header className="sticky top-0 z-40 border-b border-white/5 bg-ore/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-5 py-3">
-          <button className="flex items-center gap-2" onClick={() => setTab("board")}>
+          <button className="flex items-center gap-2" onClick={() => setView("landing")} title="Back to landing">
             <span className="text-xl">⛏️</span>
             <span className="text-lg font-black tracking-tight text-slate-100">Paydirt</span>
             <span className="hidden text-xs text-slate-500 sm:inline">turn open source into paydirt</span>
@@ -81,10 +87,19 @@ export function App(): JSX.Element {
 }
 
 function HealthBadge({ health }: { health: HealthResponse | null }): JSX.Element {
-  const tone = !health ? "bg-slate-500/20 text-slate-400" : health.db === "postgres" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300";
-  const label = !health ? "offline" : health.db === "postgres" ? "live data" : "demo seed";
+  const ds = health?.dataSource;
+  const live = ds === "live-github" || ds === "postgres";
+  const tone = !health ? "bg-slate-500/20 text-slate-400" : live ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300";
+  const label = !health
+    ? "offline"
+    : ds === "live-github" ? "● live GitHub"
+    : ds === "postgres" ? "Tiger Data live"
+    : "demo seed";
   return (
-    <span className={`chip ${tone}`} title={health ? `db=${health.db} ollama=${health.ollama} temporal=${health.temporal} tabpfn=${health.predictor} sentry=${health.sentry}` : "API unreachable"}>
+    <span
+      className={`chip ${tone}`}
+      title={health ? `feed=${ds} model=${health.modelVersion} issues=${health.issueCount} ollama=${health.ollama} temporal=${health.temporal} sidecar=${health.predictor} sentry=${health.sentry}` : "API unreachable"}
+    >
       {label}
     </span>
   );

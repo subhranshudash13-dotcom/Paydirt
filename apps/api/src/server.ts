@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { config } from "./config.js";
 import { createStore } from "./store/index.js";
 import { registerRoutes } from "./routes/index.js";
+import { hydrate } from "./live/hydrate.js";
 import { initSentry, sentryEnabled, attachFastifyErrorHandler, reportError, flush } from "./sentry.js";
 
 export async function buildApp() {
@@ -23,6 +24,14 @@ if (isMain) {
   const { app, handle } = await buildApp();
   app.log.info(`data driver = ${handle.store.driver}`);
   app.log.info(`sentry error reporting = ${sentryEnabled() ? "on" : "off (no SENTRY_DSN)"}`);
+  // Make the board dynamic: attach the sidecar predictor + try a live GitHub feed.
+  // Runs off the critical path so startup never blocks on rate-limited network.
+  hydrate(handle.store)
+    .then((feed) => {
+      handle.feed = feed;
+      app.log.info(`board feed = ${feed.source} · model = ${feed.modelVersion} · issues = ${feed.count}`);
+    })
+    .catch((err: Error) => app.log.warn(`live hydrate skipped (${err.message}) → seed + heuristic`));
   app
     .listen({ port: config.port, host: "0.0.0.0" })
     .then(() => app.log.info(`Paydirt API on :${config.port}`))
