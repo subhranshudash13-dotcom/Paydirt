@@ -3,6 +3,7 @@ import {
   type BoardQuery, type RankedIssue, type TrackedItem, type TrackSignal,
   type ModelMetrics, type Issue, type Repo, type Prediction,
 } from "@paydirt/shared";
+import type { MatchResolver } from "../profile.js";
 import type { Store } from "./types.js";
 
 const { Pool } = pg;
@@ -60,7 +61,41 @@ const SORT: Record<string, string> = {
 
 export class PostgresStore implements Store {
   readonly driver = "postgres" as const;
+  private matcher: MatchResolver | null = null;
   constructor(private readonly pool: pg.Pool) {}
+
+  attachMatcher(m: MatchResolver | null): void {
+    this.matcher = m;
+    if (m) void this.recomputeMatch().catch(() => { /* best-effort; board still shows stored match */ });
+  }
+
+  /** Fold a real match_score into each row's prediction (and EV) in memory. */
+  private applyMatch(rows: RankedIssue[]): RankedIssue[] {
+    if (!this.matcher) return rows;
+    return rows.map((r) => {
+      const m = this.matcher!({ language: r.repo.language, title: r.issue.title, body: r.issue.body ?? "", labels: r.issue.labels });
+      if (!m) return r;
+      const matchScore = m.score;
+      const p = r.prediction;
+      const est = p.estHours ?? 0;
+      const bounty = r.issue.bountyAmount ?? 0;
+      const evPerHour = est > 0 ? (p.pSuccess * bounty * (0.5 + 0.5 * matchScore)) / est : p.evPerHour;
+      return { ...r, prediction: { ...p, matchScore, evPerHour } };
+    });
+  }
+
+  /** Persist recomputed match_score for current rows (best-effort). */
+  private async recomputeMatch(): Promise<void> {
+    const res = await this.pool.query(`${SELECT} LIMIT 200`);
+    const mapped = this.applyMatch((res.rows as DbIssueRow[]).map(mapRow));
+    for (const r of mapped) {
+      await this.pool.query(
+        `UPDATE predictions SET match_score = $2, ev_per_hour = $3
+         WHERE id = (SELECT id FROM predictions WHERE issue_id = $1 ORDER BY created_at DESC LIMIT 1)`,
+        [r.issue.id, r.prediction.matchScore, r.prediction.evPerHour],
+      );
+    }
+  }
 
   async listBoard(q: BoardQuery): Promise<RankedIssue[]> {
     const params: unknown[] = [];
@@ -71,13 +106,13 @@ export class PostgresStore implements Store {
     const sort = SORT[q.sort ?? "ev"] ?? SORT.ev!;
     params.push(q.limit ?? 50);
     const res = await this.pool.query(`${SELECT} ${clause} ORDER BY ${sort} LIMIT $${params.length}`, params);
-    return (res.rows as DbIssueRow[]).map(mapRow);
+    return this.applyMatch((res.rows as DbIssueRow[]).map(mapRow));
   }
 
   async getIssue(id: number): Promise<RankedIssue | null> {
     const res = await this.pool.query(`${SELECT} WHERE i.id = $1 LIMIT 1`, [id]);
     const row = res.rows[0] as DbIssueRow | undefined;
-    return row ? mapRow(row) : null;
+    return row ? this.applyMatch([mapRow(row)])[0] ?? null : null;
   }
 
   async search(query: string, k: number): Promise<RankedIssue[]> {
@@ -87,7 +122,7 @@ export class PostgresStore implements Store {
        ORDER BY ts_rank(i.tsv, websearch_to_tsquery('english', $1)) DESC LIMIT $2`,
       [query, k],
     );
-    return (res.rows as DbIssueRow[]).map(mapRow);
+    return this.applyMatch((res.rows as DbIssueRow[]).map(mapRow));
   }
 
   async listTracked(): Promise<TrackedItem[]> {

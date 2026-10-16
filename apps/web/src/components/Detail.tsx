@@ -27,6 +27,7 @@ export function Detail({ id, onClose }: { id: number; onClose: () => void }): JS
   const [row, setRow] = useState<RankedIssue | null>(null);
   const [trackMsg, setTrackMsg] = useState<string | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
+  const [draftModel, setDraftModel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -49,11 +50,12 @@ export function Detail({ id, onClose }: { id: number; onClose: () => void }): JS
   const draftPlan = async (): Promise<void> => {
     setBusy(true);
     try {
-      const res = await fetch("/api/drafts/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ issueId: id }) });
-      const j = await res.json();
-      setDraft(res.ok ? j.text : "Local Gemma drafting needs Ollama running (`make up && make models`). Nothing is ever posted without your approval.");
-    } catch {
-      setDraft("Drafting needs Ollama. Nothing is ever posted without your approval.");
+      const d = await api.draftPlan(id);
+      setDraft(d.text);
+      setDraftModel(d.model);
+    } catch (e) {
+      setDraft(`Drafting failed: ${(e as Error).message}. Nothing is ever posted without your approval.`);
+      setDraftModel("error");
     } finally { setBusy(false); }
   };
 
@@ -104,7 +106,10 @@ export function Detail({ id, onClose }: { id: number; onClose: () => void }): JS
       {trackMsg && <p className="mt-2 rounded-lg bg-sky-500/10 p-2 text-sm text-sky-200">{trackMsg}</p>}
       {draft && (
         <div className="mt-3 rounded-lg border border-dashed border-white/15 bg-black/20 p-3">
-          <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">Draft · dry run · not posted</div>
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wide text-slate-500">Draft · dry run · not posted</span>
+            {draftModel && <span className="chip bg-white/5 text-slate-400">{draftModel}</span>}
+          </div>
           <p className="whitespace-pre-wrap text-sm text-slate-300">{draft}</p>
         </div>
       )}

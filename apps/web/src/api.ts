@@ -1,4 +1,28 @@
-import type { RankedIssue, TrackedItem, ModelMetrics, HealthResponse } from "@paydirt/shared";
+import type { RankedIssue, TrackedItem, ModelMetrics, HealthResponse, Draft } from "@paydirt/shared";
+
+export interface IngestResult {
+  ok: boolean;
+  login: string;
+  source: "github" | "unreachable";
+  reason?: string;
+  repoCount: number;
+  languages: string[];
+  skills: string[];
+  chunkCount: number;
+  embeddingSource: "ollama" | "skipped (offline)";
+  ingestedAt: string;
+}
+
+export interface ProfileState {
+  active: boolean;
+  login?: string;
+  skills?: string[];
+  languages?: string[];
+  source?: "github" | "unreachable";
+  ingestedAt?: string;
+  chunkCount?: number;
+  embeddedChunks?: number;
+}
 
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -33,4 +57,7 @@ export const api = {
   createTrack: (issueId: number) => postJSON<TrackedItem>("/api/track", { issueId }),
   signal: (id: number, type: string, payload?: Record<string, unknown>) =>
     postJSON<TrackedItem>(`/api/track/${id}/signal`, { type, payload }),
+  profile: () => getJSON<ProfileState>("/api/profile"),
+  ingest: (githubLogin: string) => postJSON<IngestResult>("/api/profile/ingest", { githubLogin }),
+  draftPlan: (issueId: number) => postJSON<Draft>("/api/drafts/plan", { issueId }),
 };

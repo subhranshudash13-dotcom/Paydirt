@@ -9,18 +9,20 @@ import {
   type TrackStatus,
   type Issue,
   type Repo,
+  type FeatureRow,
 } from "@paydirt/shared";
-import { score, type ScoreInput } from "../scoring.js";
+import { score } from "../scoring.js";
 import { featuresFromSeed, SEED, type SeedRecord } from "../seed/data.js";
+import type { MatchResolver } from "../profile.js";
 import type { Store } from "./types.js";
 
 const MODEL_VERSION = "heuristic-v1";
-const NEUTRAL_MATCH = 0.5; // real match needs an ingested profile (Loop 7)
+const NEUTRAL_MATCH = 0.5; // used until a profile is ingested (Loop 7)
 
 interface Row {
   issue: Issue;
   repo: Repo;
-  input: ScoreInput;
+  features: FeatureRow;
 }
 
 function buildRow(s: SeedRecord, id: number, repoId: number): Row {
@@ -29,7 +31,6 @@ function buildRow(s: SeedRecord, id: number, repoId: number): Row {
   const gfi = hasGoodFirstIssue(s.labels);
   const amount = bounty?.amount ?? 0;
   const features = featuresFromSeed(s, amount, bodyLength, gfi, s.issueAgeDays);
-  const input: ScoreInput = { ...features, matchScore: NEUTRAL_MATCH };
   const issue: Issue = {
     id,
     repoId,
@@ -55,34 +56,17 @@ function buildRow(s: SeedRecord, id: number, repoId: number): Row {
     language: s.language,
     openIssues: s.openIssues,
   };
-  return { issue, repo, input };
+  return { issue, repo, features };
 }
 
 const round = (x: number, p: number): number => Math.round(x * 10 ** p) / 10 ** p;
 
-function toRanked(row: Row): RankedIssue {
-  const out = score(row.input);
-  return {
-    issue: row.issue,
-    repo: row.repo,
-    prediction: {
-      issueId: row.issue.id,
-      modelVersion: MODEL_VERSION,
-      pSuccess: round(out.pSuccess, 4),
-      daysToMergeEst: round(out.daysToMergeEst, 2),
-      evPerHour: round(out.evPerHour, 4),
-      matchScore: NEUTRAL_MATCH,
-      estHours: round(out.estHours, 2),
-      features: row.input,
-    },
-  };
-}
-
 export class MemoryStore implements Store {
   readonly driver = "memory" as const;
-  private rows: RankedIssue[];
+  private baseRows: Row[];
   private tracked: TrackedItem[] = [];
   private trackedSeq = 1;
+  private matcher: MatchResolver | null = null;
 
   constructor() {
     const repoIds = new Map<string, number>();
@@ -94,15 +78,50 @@ export class MemoryStore implements Store {
       }
       return v;
     };
-    this.rows = SEED.map((s, i) => toRanked(buildRow(s, i + 1, rid(s.fullName))));
+    this.baseRows = SEED.map((s, i) => buildRow(s, i + 1, rid(s.fullName)));
+  }
+
+  attachMatcher(m: MatchResolver | null): void {
+    this.matcher = m;
+  }
+
+  /** Compute a ranked row, folding the real match_score into EV via scoring. */
+  private rankedOf(row: Row): RankedIssue {
+    const m = this.matcher?.({
+      language: row.repo.language,
+      title: row.issue.title,
+      body: row.issue.body ?? "",
+      labels: row.issue.labels,
+    });
+    const matchScore = m?.score ?? NEUTRAL_MATCH;
+    const out = score({ ...row.features, matchScore });
+    return {
+      issue: row.issue,
+      repo: row.repo,
+      prediction: {
+        issueId: row.issue.id,
+        modelVersion: MODEL_VERSION,
+        pSuccess: round(out.pSuccess, 4),
+        daysToMergeEst: round(out.daysToMergeEst, 2),
+        evPerHour: round(out.evPerHour, 4),
+        matchScore: round(matchScore, 4),
+        estHours: round(out.estHours, 2),
+        features: row.features,
+      },
+    };
+  }
+
+  private allRanked(): RankedIssue[] {
+    return this.baseRows.map((r) => this.rankedOf(r));
   }
 
   private byId(id: number): RankedIssue | undefined {
-    return this.rows.find((r) => r.issue.id === id);
+    const base = this.baseRows.find((r) => r.issue.id === id);
+    return base ? this.rankedOf(base) : undefined;
   }
 
   async listBoard(q: BoardQuery): Promise<RankedIssue[]> {
-    let rows = [...this.rows];
+    let rows = this.allRanked();
     if (q.language) rows = rows.filter((r) => r.repo.language?.toLowerCase() === q.language?.toLowerCase());
     if (q.minEv != null) rows = rows.filter((r) => (r.prediction.evPerHour ?? 0) >= q.minEv!);
     const key = q.sort ?? "ev";
@@ -127,7 +146,7 @@ export class MemoryStore implements Store {
 
   async search(query: string, k: number): Promise<RankedIssue[]> {
     const toks = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const scored = this.rows
+    const scored = this.allRanked()
       .map((r) => {
         const hay = `${r.issue.title} ${r.issue.body ?? ""} ${r.repo.fullName} ${r.issue.labels.join(" ")}`.toLowerCase();
         const hits = toks.reduce((n, t) => n + (hay.includes(t) ? 1 : 0), 0);
@@ -174,7 +193,7 @@ export class MemoryStore implements Store {
   }
 
   async getModelMetrics(): Promise<ModelMetrics> {
-    return heuristicsMetrics(this.rows);
+    return heuristicsMetrics(this.allRanked());
   }
 }
 

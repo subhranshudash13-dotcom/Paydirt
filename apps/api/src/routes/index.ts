@@ -6,6 +6,8 @@ import {
 import { config } from "../config.js";
 import type { StoreHandle } from "../store/index.js";
 import { httpOk, tcpOk } from "../probes.js";
+import * as profile from "../profile.js";
+import { planDraft } from "../drafts.js";
 
 export async function registerRoutes(app: FastifyInstance, handle: StoreHandle): Promise<void> {
   const { store, probe } = handle;
@@ -65,12 +67,41 @@ export async function registerRoutes(app: FastifyInstance, handle: StoreHandle):
     return updated;
   });
 
-  // Wired fully in Loop 7 (local Gemma); present so the UI can call them.
-  app.post("/api/profile/ingest", async (_req, reply) =>
-    reply.code(202).send({ queued: true, note: "profile embedding runs via Ollama when available" }));
+  // Profile ingest + skill matching (Loop 7, PRD §9). Real public-repo read; the
+  // active profile turns match_score into a skill-aware signal and re-ranks the board.
+  app.post("/api/profile/ingest", async (req, reply) => {
+    const body = req.body as { githubLogin?: string };
+    const login = (body.githubLogin ?? "").trim();
+    if (!login) return reply.code(400).send({ error: "githubLogin required" });
+    const result = await profile.ingest(login);
+    store.attachMatcher(profile.matcher()); // re-rank board with real match (or neutral)
+    return result;
+  });
 
-  app.post("/api/drafts/plan", async (_req, reply) =>
-    reply.code(503).send({ error: "ollama_unavailable", dryRun: config.dryRun }));
+  app.get("/api/profile", async () => {
+    const a = profile.getActive();
+    if (!a) return { active: false };
+    return {
+      active: true,
+      login: a.profile.login,
+      skills: a.profile.skills,
+      languages: a.profile.languages,
+      source: a.profile.source,
+      ingestedAt: a.profile.ingestedAt,
+      chunkCount: a.chunks.length,
+      embeddedChunks: a.chunks.filter((c) => c.embedding).length,
+    };
+  });
+
+  // Gemma plan draft (never posted). Honest template fallback when Ollama is offline.
+  app.post("/api/drafts/plan", async (req, reply) => {
+    const body = req.body as { issueId?: number };
+    const issueId = Number(body.issueId);
+    if (!Number.isFinite(issueId)) return reply.code(400).send({ error: "issueId required" });
+    const issue = await store.getIssue(issueId);
+    if (!issue) return reply.code(404).send({ error: "issue_not_found" });
+    return planDraft(issue);
+  });
 
   // Convenience: show the bounty parser is real, not assumed.
   app.get("/api/parse-labels", async (req) => {

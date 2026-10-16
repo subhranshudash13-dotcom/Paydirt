@@ -6,11 +6,13 @@ import { Detail } from "./components/Detail";
 import { Tracker } from "./components/Tracker";
 import { ModelPanel } from "./components/ModelPanel";
 import { Privacy } from "./components/Privacy";
+import { Profile } from "./components/Profile";
 
-type Tab = "board" | "tracker" | "model" | "privacy";
+type Tab = "board" | "profile" | "tracker" | "model" | "privacy";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "board", label: "Board" },
+  { key: "profile", label: "Profile" },
   { key: "tracker", label: "Tracker" },
   { key: "model", label: "Model" },
   { key: "privacy", label: "Privacy" },
@@ -62,6 +64,7 @@ export function App(): JSX.Element {
 
       <main className="mx-auto max-w-6xl px-5 py-6">
         {tab === "board" && <Board onSelect={setSelected} search={search} />}
+        {tab === "profile" && <Profile onGoToBoard={() => setTab("board")} />}
         {tab === "tracker" && <Tracker />}
         {tab === "model" && <ModelPanel />}
         {tab === "privacy" && <Privacy />}
