@@ -84,7 +84,7 @@ function HealthBadge({ health }: { health: HealthResponse | null }): JSX.Element
   const tone = !health ? "bg-slate-500/20 text-slate-400" : health.db === "postgres" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300";
   const label = !health ? "offline" : health.db === "postgres" ? "live data" : "demo seed";
   return (
-    <span className={`chip ${tone}`} title={health ? `db=${health.db} ollama=${health.ollama} temporal=${health.temporal} tabpfn=${health.predictor}` : "API unreachable"}>
+    <span className={`chip ${tone}`} title={health ? `db=${health.db} ollama=${health.ollama} temporal=${health.temporal} tabpfn=${health.predictor} sentry=${health.sentry}` : "API unreachable"}>
       {label}
     </span>
   );

@@ -194,6 +194,7 @@ export const HealthResponse = z.object({
   temporal: z.boolean(),
   predictor: z.boolean(),
   ollama: z.boolean(),
+  sentry: z.boolean().default(false),
   version: z.string(),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;

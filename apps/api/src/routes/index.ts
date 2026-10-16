@@ -6,6 +6,7 @@ import {
 import { config } from "../config.js";
 import type { StoreHandle } from "../store/index.js";
 import { httpOk, tcpOk } from "../probes.js";
+import { sentryEnabled } from "../sentry.js";
 import * as profile from "../profile.js";
 import { planDraft } from "../drafts.js";
 
@@ -24,6 +25,7 @@ export async function registerRoutes(app: FastifyInstance, handle: StoreHandle):
       temporal,
       predictor,
       ollama,
+      sentry: sentryEnabled(),
       version: config.version,
     };
   });

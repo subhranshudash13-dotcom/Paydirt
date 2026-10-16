@@ -37,6 +37,7 @@ export function Privacy(): JSX.Element {
           <Dot on={!!h?.predictor} onText="TabPFN sidecar up" offText="TabPFN sidecar down" />
           <Dot on={!!h?.temporal} onText="Temporal up" offText="Temporal down" />
           <Dot on={(h?.db ?? "") !== "down"} onText={`Postgres/Tiger Data: ${h?.db ?? "?"}`} offText="DB down" />
+          <Dot on={!!h?.sentry} onText="Sentry error reporting on" offText="Sentry off (no DSN) — errors stay local" />
         </div>
       </div>
 

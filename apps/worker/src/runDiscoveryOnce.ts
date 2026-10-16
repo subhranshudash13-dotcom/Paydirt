@@ -5,10 +5,13 @@ import { featuresFromIssue } from "./activities.js";
 import { repoStats, searchBounties } from "./clients/github.js";
 import { predict, sidecarHealth } from "./clients/sidecar.js";
 import { evPerHour } from "./heuristics.js";
+import { initSentry, sentryEnabled, reportError, flush } from "./sentry.js";
 
 const NEUTRAL_MATCH = 0.5;
 
 async function main(): Promise<void> {
+  initSentry();
+  console.log(`[discovery] sentry error reporting = ${sentryEnabled() ? "on" : "off (no SENTRY_DSN)"}`);
   const health = await sidecarHealth();
   console.log(
     health.reachable
@@ -55,7 +58,9 @@ async function main(): Promise<void> {
   console.log(`\n[discovery] scored ${ranked.length} issues; top EV/hr = ${ranked[0]?.ev.toFixed(2)}`);
 }
 
-main().catch((e) => {
+main().catch(async (e) => {
+  reportError(e);
+  await flush();
   console.error(e);
   process.exit(1);
 });
