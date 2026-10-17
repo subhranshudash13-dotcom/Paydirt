@@ -20,7 +20,9 @@ export const config = {
   temporalNamespace: process.env.TEMPORAL_NAMESPACE ?? "default",
   taskQueue: process.env.TEMPORAL_TASK_QUEUE ?? "paydirt",
   databaseUrl: process.env.DATABASE_URL ?? "",
-  predictorUrl: process.env.PREDICTOR_URL ?? "http://localhost:8000",
+  get predictorUrl(): string {
+    return process.env.PREDICTOR_URL ?? "http://localhost:8000";
+  },
   ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
   gemmaChatModel: process.env.GEMMA_CHAT_MODEL ?? "gemma3:4b",
   gemmaEmbedModel: process.env.GEMMA_EMBED_MODEL ?? "embeddinggemma",

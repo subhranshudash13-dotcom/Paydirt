@@ -34,7 +34,8 @@ export async function predict(rows: ScoredFeature[]): Promise<Prediction[]> {
   if (rows.length === 0) return [];
   try {
     const body = { rows: rows.map((r) => ({ ref: r.ref, ...r.features })) };
-    const res = await fetch(`${config.predictorUrl}/predict`, {
+    const predictUrl = new URL("predict", config.predictorUrl.replace(/\/?$/, "/"));
+    const res = await fetch(predictUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -64,7 +65,8 @@ export interface SidecarHealth {
 /** GET /health — reports the ACTUAL serving backend (never assumes TabPFN). */
 export async function sidecarHealth(): Promise<SidecarHealth> {
   try {
-    const res = await fetch(`${config.predictorUrl}/health`, { signal: AbortSignal.timeout(3000) });
+    const healthUrl = new URL("health", config.predictorUrl.replace(/\/?$/, "/"));
+    const res = await fetch(healthUrl, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return { reachable: false, backend: "unreachable", modelVersion: "n/a", modelTrained: false };
     const d = (await res.json()) as { backend?: string; modelVersion?: string; modelTrained?: boolean };
     return {
@@ -87,7 +89,8 @@ export interface TrainResult {
 /** POST /train (PRD §7.4) — called by RetrainWorkflow. Anonymous rows only. */
 export async function train(rows: Array<Record<string, unknown>>): Promise<TrainResult> {
   try {
-    const res = await fetch(`${config.predictorUrl}/train`, {
+    const trainUrl = new URL("train", config.predictorUrl.replace(/\/?$/, "/"));
+    const res = await fetch(trainUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ rows }),

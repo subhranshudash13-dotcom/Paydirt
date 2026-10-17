@@ -25,7 +25,9 @@ export const config = {
   ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
   gemmaChatModel: process.env.GEMMA_CHAT_MODEL ?? "gemma3:4b",
   gemmaEmbedModel: process.env.GEMMA_EMBED_MODEL ?? "embeddinggemma",
-  predictorUrl: process.env.PREDICTOR_URL ?? "http://localhost:8000",
+  get predictorUrl(): string {
+    return process.env.PREDICTOR_URL ?? "http://localhost:8000";
+  },
   githubToken: process.env.GITHUB_TOKEN ?? "",
   serpapiKey: process.env.SERPAPI_KEY ?? "",
   tabpfnToken: process.env.TABPFN_TOKEN ?? "",

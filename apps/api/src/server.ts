@@ -35,9 +35,11 @@ export async function buildApp() {
   return { app, handle };
 }
 
-const isMain = process.argv[1]?.includes("server");
+let appInstance: Awaited<ReturnType<typeof buildApp>>["app"] | undefined;
+const isMain = process.argv[1]?.includes("server") || Boolean(process.env.VERCEL);
 if (isMain) {
   const { app, handle } = await buildApp();
+  appInstance = app;
   app.log.info(`data driver = ${handle.store.driver}`);
   app.log.info(`sentry error reporting = ${sentryEnabled() ? "on" : "off (no SENTRY_DSN)"}`);
   // Make the board dynamic: attach the sidecar predictor + try a live GitHub feed.
@@ -58,3 +60,5 @@ if (isMain) {
       process.exit(1);
     });
 }
+
+export default appInstance;

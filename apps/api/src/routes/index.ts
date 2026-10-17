@@ -15,8 +15,9 @@ export async function registerRoutes(app: FastifyInstance, handle: StoreHandle):
   const { store, probe } = handle;
 
   app.get("/api/health", async () => {
+    const predictorHealthUrl = new URL("health", config.predictorUrl.replace(/\/?$/, "/"));
     const [predictor, ollama, temporal] = await Promise.all([
-      httpOk(`${config.predictorUrl}/health`),
+      httpOk(predictorHealthUrl.toString()),
       httpOk(`${config.ollamaUrl}/api/tags`),
       tcpOk(config.temporalAddress.split(":")[0] ?? "localhost", Number(config.temporalAddress.split(":")[1] ?? 7233)),
     ]);

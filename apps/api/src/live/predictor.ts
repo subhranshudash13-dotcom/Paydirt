@@ -41,8 +41,9 @@ export const predictRows: Predictor = async (rows) => {
   if (!rows.length) return new Map();
   try {
     const body = { rows: rows.map((r) => ({ ref: r.ref, ...r.features })) };
+    const predictUrl = new URL("predict", config.predictorUrl.replace(/\/?$/, "/"));
     const data = (await fetchJsonWithTimeout(
-      `${config.predictorUrl}/predict`,
+      predictUrl.toString(),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -69,7 +70,8 @@ export const predictRows: Predictor = async (rows) => {
 /** Cheap liveness probe used to label the model honestly in `/api/health`. */
 export async function sidecarModelVersion(): Promise<string | null> {
   try {
-    const data = (await fetchJsonWithTimeout(`${config.predictorUrl}/health`, { method: "GET" }, 2500)) as {
+    const healthUrl = new URL("health", config.predictorUrl.replace(/\/?$/, "/"));
+    const data = (await fetchJsonWithTimeout(healthUrl.toString(), { method: "GET" }, 2500)) as {
       modelTrained?: boolean;
       modelVersion?: string | null;
     };
