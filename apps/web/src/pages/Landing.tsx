@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { HealthResponse, RankedIssue } from "@paydirt/shared";
 import { api } from "../api";
 import { money, perHour } from "../format";
+import { Footer } from "../components/Footer";
 
 interface LandingProps {
   onEnter: () => void;
@@ -65,8 +66,6 @@ const SPONSORS = [
 export default function Landing({ onEnter }: LandingProps): JSX.Element {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [rows, setRows] = useState<RankedIssue[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready" | "down">("loading");
-
   useEffect(() => {
     let alive = true;
     const load = async (): Promise<void> => {
@@ -78,9 +77,8 @@ export default function Landing({ onEnter }: LandingProps): JSX.Element {
         if (!alive) return;
         setHealth(h);
         setRows(issues);
-        setStatus("ready");
       } catch {
-        if (alive) setStatus("down");
+        /* ignore */
       }
     };
     void load();
@@ -157,19 +155,7 @@ export default function Landing({ onEnter }: LandingProps): JSX.Element {
 
       {/* Hero Section */}
       <section className="relative z-10 mx-auto max-w-6xl px-6 pt-10 pb-16 text-center sm:pt-16">
-        {/* Live Status Pill */}
-        <div className="fade-up mx-auto mb-6 inline-flex items-center gap-2 rounded border-2 border-slate-700 bg-coal px-4 py-1.5 font-mono text-xs text-slate-200 shadow-brutal-sm">
-          <span className="live-dot" />
-          {status === "ready" ? (
-            <>
-              <span className="font-extrabold text-acid-400">{stats.count || 12}</span> ACTIVE BOUNTIES ·{" "}
-              <span className="font-extrabold text-gold-400">{money(stats.total || 4500)}</span> ON TABLE · MODEL{" "}
-              <span className="font-extrabold text-cyber-300">{health?.modelVersion ?? "heuristic-v1"}</span>
-            </>
-          ) : (
-            <>CONNECTING TO THE LIVE FEED…</>
-          )}
-        </div>
+
 
         {/* Hero Title */}
         <h1 className="fade-up delay-1 mx-auto max-w-4xl text-5xl font-black leading-[1.02] tracking-tight text-white sm:text-7xl">
@@ -364,16 +350,7 @@ export default function Landing({ onEnter }: LandingProps): JSX.Element {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t-2 border-slate-800 bg-coal py-8 text-center font-mono text-xs text-slate-400">
-        <div className="mx-auto max-w-6xl px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <strong>PAYDIRT</strong> · MIT Licensed · Open-Weight AI for Open-Source Devs
-          </div>
-          <div>
-            DEV × Hacktoberfest 2026 · <span className="text-gold-400 font-bold">AI Belongs to Everyone</span>
-          </div>
-        </div>
-      </footer>
+      <Footer health={health} onNavigateTab={() => onEnter()} />
     </div>
   );
 }

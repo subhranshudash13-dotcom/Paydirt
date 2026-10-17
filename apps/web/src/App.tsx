@@ -8,6 +8,7 @@ import { Tracker } from "./components/Tracker";
 import { ModelPanel } from "./components/ModelPanel";
 import { Privacy } from "./components/Privacy";
 import { Profile } from "./components/Profile";
+import { Footer } from "./components/Footer";
 
 type Tab = "board" | "profile" | "tracker" | "model" | "privacy";
 
@@ -131,29 +132,12 @@ export function App(): JSX.Element {
         {tab === "privacy" && <Privacy />}
       </main>
 
-      {/* Brutalist Footer */}
-      <footer className="border-t-2 border-slate-800 bg-coal py-4 text-center font-mono text-xs text-slate-400">
-        <div className="mx-auto max-w-7xl px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span>⛏️ <strong>PAYDIRT</strong></span>
-            <span>·</span>
-            <span>MIT Licensed</span>
-            <span>·</span>
-            <span className="text-slate-300">Hacktoberfest 2026</span>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-slate-400">
-            <span>TabPFN (Prior Labs)</span>
-            <span>·</span>
-            <span>Gemma Local</span>
-            <span>·</span>
-            <span>Tiger Data</span>
-            <span>·</span>
-            <span>Temporal</span>
-            <span>·</span>
-            <span>Sentry</span>
-          </div>
-        </div>
-      </footer>
+      <Footer
+        health={health}
+        onNavigateTab={setTab}
+        onGoToLanding={() => setView("landing")}
+        activeTab={tab}
+      />
 
       {/* Issue Detail Drawer Modal */}
       {selected != null && (
