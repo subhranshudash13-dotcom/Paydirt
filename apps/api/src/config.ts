@@ -16,7 +16,7 @@ const bool = (v: string | undefined, d = false): boolean =>
 
 export const config = {
   env: process.env.NODE_ENV ?? "development",
-  port: Number(process.env.PORT ?? 3000),
+  port: Number(process.env.PORT ?? 3001),
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
   databaseUrl: process.env.DATABASE_URL ?? "",
   temporalAddress: process.env.TEMPORAL_ADDRESS ?? "localhost:7233",
