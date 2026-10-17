@@ -24,19 +24,23 @@ export interface ProfileState {
   embeddedChunks?: number;
 }
 
+const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+
 async function getJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${url}`);
+  const fullUrl = url.startsWith("http") ? url : `${API_BASE}${url}`;
+  const res = await fetch(fullUrl);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${fullUrl}`);
   return (await res.json()) as T;
 }
 
 async function postJSON<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
+  const fullUrl = url.startsWith("http") ? url : `${API_BASE}${url}`;
+  const res = await fetch(fullUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${url}`);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${fullUrl}`);
   return (await res.json()) as T;
 }
 

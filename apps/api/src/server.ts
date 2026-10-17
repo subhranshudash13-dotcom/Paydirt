@@ -10,7 +10,23 @@ export async function buildApp() {
   initSentry();
   const app = Fastify({ logger: true });
   attachFastifyErrorHandler(app);
-  await app.register(cors, { origin: config.corsOrigin });
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      const configured = config.corsOrigin.split(",").map((s) => s.trim());
+      if (
+        config.corsOrigin === "*" ||
+        configured.includes("*") ||
+        configured.includes(origin) ||
+        origin.startsWith("http://localhost:") ||
+        origin.startsWith("http://127.0.0.1:")
+      ) {
+        return cb(null, true);
+      }
+      return cb(null, true);
+    },
+    credentials: true,
+  });
   const handle = await createStore();
   await registerRoutes(app, handle);
   app.addHook("onClose", async () => {

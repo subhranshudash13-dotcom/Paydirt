@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -15,82 +15,161 @@ body,
 }
 
 body {
-  @apply bg-ore text-slate-200 antialiased;
-  font-family: Inter, system-ui, sans-serif;
+  @apply bg-ore text-slate-100 antialiased;
+  font-family: "Space Grotesk", Inter, system-ui, sans-serif;
+  background-color: #0c0e14;
   background-image:
-    radial-gradient(1200px 600px at 80% -10%, rgba(224, 169, 46, 0.10), transparent),
-    radial-gradient(900px 500px at 0% 110%, rgba(56, 189, 248, 0.06), transparent);
+    radial-gradient(rgba(234, 179, 8, 0.08) 1px, transparent 0),
+    radial-gradient(rgba(6, 182, 212, 0.04) 1px, transparent 0);
+  background-size: 28px 28px, 56px 56px;
+  background-position: 0 0, 14px 14px;
   background-attachment: fixed;
 }
 
+/* ── Neo-Brutalism Core Component System ──────────────────────────────── */
 @layer components {
+  /* Brutalist Cards */
   .card {
-    @apply rounded-xl border border-white/5 bg-seam/70 backdrop-blur;
+    @apply border-2 border-slate-800 bg-seam rounded-lg shadow-brutal transition-all;
+  }
+  .card:hover {
+    @apply border-slate-700 shadow-brutal-lg;
+  }
+  .card-static {
+    @apply border-2 border-slate-800 bg-seam rounded-lg shadow-brutal;
+  }
+  .card-accent-gold {
+    @apply border-2 border-gold-500 bg-seam rounded-lg shadow-brutal-gold;
+  }
+  .card-accent-cyber {
+    @apply border-2 border-cyber-500 bg-seam rounded-lg shadow-brutal-cyber;
+  }
+  .card-accent-acid {
+    @apply border-2 border-acid-500 bg-seam rounded-lg shadow-brutal-acid;
   }
 
+  /* Brutalist Chips / Badges */
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 rounded border border-slate-700 px-2.5 py-0.5 text-xs font-mono font-bold tracking-wide shadow-brutal-sm;
+  }
+  .chip-gold {
+    @apply inline-flex items-center gap-1.5 rounded border-2 border-gold-600 bg-gold-400 text-black px-2.5 py-0.5 text-xs font-mono font-extrabold uppercase shadow-brutal-sm;
+  }
+  .chip-cyber {
+    @apply inline-flex items-center gap-1.5 rounded border-2 border-cyber-500/80 bg-cyber-500/15 text-cyber-300 px-2.5 py-0.5 text-xs font-mono font-bold uppercase shadow-brutal-sm;
+  }
+  .chip-acid {
+    @apply inline-flex items-center gap-1.5 rounded border-2 border-acid-500/80 bg-acid-500/15 text-acid-300 px-2.5 py-0.5 text-xs font-mono font-bold uppercase shadow-brutal-sm;
   }
 
+  /* Brutalist Buttons (Tactile click mechanics) */
   .btn-gold {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 px-6 py-3 text-sm font-bold text-black shadow-lg shadow-gold-500/20 transition hover:scale-[1.02] hover:shadow-gold-500/40 active:scale-95;
+    @apply inline-flex items-center justify-center gap-2 rounded border-2 border-black bg-gold-400 px-5 py-2.5 text-sm font-extrabold uppercase tracking-wide text-black shadow-brutal transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-gold-300 hover:shadow-brutal-lg active:translate-x-0.5 active:translate-y-0.5 active:shadow-none disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-cyber {
+    @apply inline-flex items-center justify-center gap-2 rounded border-2 border-black bg-cyber-400 px-5 py-2.5 text-sm font-extrabold uppercase tracking-wide text-black shadow-brutal transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-cyber-300 hover:shadow-brutal-lg active:translate-x-0.5 active:translate-y-0.5 active:shadow-none disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-acid {
+    @apply inline-flex items-center justify-center gap-2 rounded border-2 border-black bg-acid-400 px-5 py-2.5 text-sm font-extrabold uppercase tracking-wide text-black shadow-brutal transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-acid-300 hover:shadow-brutal-lg active:translate-x-0.5 active:translate-y-0.5 active:shadow-none disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded border-2 border-slate-700 bg-coal px-5 py-2.5 text-sm font-bold text-slate-100 shadow-brutal transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-slate-500 hover:bg-slate-800 hover:shadow-brutal-lg active:translate-x-0.5 active:translate-y-0.5 active:shadow-none disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-1.5 rounded border-2 border-slate-700 bg-transparent px-3 py-1.5 text-xs font-mono font-bold uppercase text-slate-300 shadow-brutal-sm transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-slate-400 hover:text-white hover:shadow-brutal active:translate-x-0.5 active:translate-y-0.5 active:shadow-none;
   }
 
-  .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/10;
+  /* Brutalist Inputs */
+  .input-brutal {
+    @apply rounded border-2 border-slate-700 bg-black/60 px-3 py-1.5 text-sm font-mono text-slate-100 shadow-brutal-sm outline-none transition focus:border-gold-400 focus:shadow-brutal-gold;
   }
 }
 
-/* ── Landing animations ─────────────────────────────────────────────── */
+/* ── Graphic patterns & micro-animations ────────────────────────────── */
 .grid-bg {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(circle at 50% 30%, black, transparent 75%);
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(circle at 50% 35%, black, transparent 80%);
+}
+
+.brutal-stripe {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(234, 179, 8, 0.15),
+    rgba(234, 179, 8, 0.15) 10px,
+    transparent 10px,
+    transparent 20px
+  );
+}
+
+.brutal-stripe-danger {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(239, 68, 68, 0.15),
+    rgba(239, 68, 68, 0.15) 10px,
+    transparent 10px,
+    transparent 20px
+  );
 }
 
 @keyframes floaty {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  50% { transform: translateY(-6px); }
 }
-.floaty { animation: floaty 6s ease-in-out infinite; }
+.floaty { animation: floaty 4s ease-in-out infinite; }
 
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.fade-up { animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.fade-up { animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
 .shimmer-text {
-  background: linear-gradient(90deg, #f5c542, #fff6d8, #e0a92e, #f5c542);
+  background: linear-gradient(90deg, #fef08a, #ffffff, #facc15, #fef08a);
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: shimmer 6s linear infinite;
+  animation: shimmer 5s linear infinite;
 }
 
 @keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
-  70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+  70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
 }
 .live-dot {
   width: 8px;
   height: 8px;
   border-radius: 9999px;
-  background: #34d399;
+  background: #22c55e;
   animation: pulse-ring 2s infinite;
 }
 
-.delay-1 { animation-delay: 0.08s; }
-.delay-2 { animation-delay: 0.16s; }
-.delay-3 { animation-delay: 0.24s; }
-.delay-4 { animation-delay: 0.32s; }
-.delay-5 { animation-delay: 0.40s; }
-.delay-6 { animation-delay: 0.48s; }
+/* Marquee / Ribbon banner */
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 25s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+.delay-1 { animation-delay: 0.05s; }
+.delay-2 { animation-delay: 0.10s; }
+.delay-3 { animation-delay: 0.15s; }
+.delay-4 { animation-delay: 0.20s; }
+.delay-5 { animation-delay: 0.25s; }
+.delay-6 { animation-delay: 0.30s; }
+

@@ -5,46 +5,72 @@ import { money, pct, perHour, days } from "../format";
 
 function FeatureBars({ f }: { f: Partial<FeatureRow> }): JSX.Element {
   const rows: [string, number][] = [
-    ["Maintainer merge rate (90d)", f.maintainerMergeRatePrior90d ?? 0],
-    ["P(paid) within 30d", (f as { pSuccess?: number }).pSuccess ?? 0],
-    ["Repo activity (30d commits)", Math.min(1, (f.repoCommitsPrior30d ?? 0) / 300)],
-    ["Fast maintainer response", Math.max(0, 1 - Math.min(1, (f.maintainerMedianFirstResponseHoursPrior90d ?? 0) / 72))],
-    ["Skill match", (f as { matchScore?: number }).matchScore ?? 0],
+    ["Maintainer Merge Rate (90d)", f.maintainerMergeRatePrior90d ?? 0.5],
+    ["P(paid) Within 30d", (f as { pSuccess?: number }).pSuccess ?? 0.5],
+    ["Repo Activity (30d Commits)", Math.min(1, (f.repoCommitsPrior30d ?? 0) / 300)],
+    [
+      "Maintainer Response Latency",
+      Math.max(0, 1 - Math.min(1, (f.maintainerMedianFirstResponseHoursPrior90d ?? 24) / 72)),
+    ],
+    ["Developer Skill Match", (f as { matchScore?: number }).matchScore ?? 0.5],
   ];
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {rows.map(([label, v]) => (
         <div key={label}>
-          <div className="mb-0.5 flex justify-between text-xs text-slate-400"><span>{label}</span><span>{Math.round(v * 100)}%</span></div>
-          <div className="h-2 rounded bg-white/10"><div className="h-2 rounded bg-gradient-to-r from-gold-600 to-gold-400" style={{ width: `${Math.round(v * 100)}%` }} /></div>
+          <div className="mb-1 flex justify-between font-mono text-xs text-slate-300">
+            <span>{label}</span>
+            <span className="font-bold text-white">{Math.round(v * 100)}%</span>
+          </div>
+          <div className="h-2.5 rounded border border-slate-700 bg-black/60 overflow-hidden shadow-brutal-sm">
+            <div
+              className="h-full bg-gradient-to-r from-gold-500 to-gold-300"
+              style={{ width: `${Math.round(v * 100)}%` }}
+            />
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-export function Detail({ id, onClose }: { id: number; onClose: () => void }): JSX.Element {
+interface DetailProps {
+  id: number;
+  onClose: () => void;
+  onTrackSuccess?: () => void;
+}
+
+export function Detail({ id, onClose, onTrackSuccess }: DetailProps): JSX.Element {
   const [row, setRow] = useState<RankedIssue | null>(null);
   const [trackMsg, setTrackMsg] = useState<string | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const [draftModel, setDraftModel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setRow(null);
-    void api.issue(id).then((r) => alive && setRow(r)).catch(() => alive && setRow(null));
-    return () => { alive = false; };
+    void api
+      .issue(id)
+      .then((r) => alive && setRow(r))
+      .catch(() => alive && setRow(null));
+    return () => {
+      alive = false;
+    };
   }, [id]);
 
   const track = async (): Promise<void> => {
     setBusy(true);
     try {
       const t = await api.createTrack(id);
-      setTrackMsg(`Tracking started — Temporal workflow ${t.workflowId ?? "(queued)"} in state ${t.status}.`);
+      setTrackMsg(`Durable workflow ${t.workflowId ?? `bounty-lifecycle-${id}`} created in state ${t.status}.`);
     } catch (e) {
-      setTrackMsg(`Track failed: ${(e as Error).message}`);
-    } finally { setBusy(false); }
+      setTrackMsg(`Tracking failed: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const draftPlan = async (): Promise<void> => {
@@ -54,85 +80,277 @@ export function Detail({ id, onClose }: { id: number; onClose: () => void }): JS
       setDraft(d.text);
       setDraftModel(d.model);
     } catch (e) {
-      setDraft(`Drafting failed: ${(e as Error).message}. Nothing is ever posted without your approval.`);
+      setDraft(`Drafting failed: ${(e as Error).message}. No code was posted.`);
       setDraftModel("error");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
-  if (!row) return <Panel onClose={onClose} title="Loading…"><div className="py-10 text-center text-slate-400">Loading issue…</div></Panel>;
+  const handleCopyDraft = (): void => {
+    if (!draft) return;
+    navigator.clipboard.writeText(draft);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
+  };
 
-  const f = { ...(row.prediction.features ?? {}), pSuccess: row.prediction.pSuccess, matchScore: row.prediction.matchScore } as Partial<FeatureRow>;
+  if (!row) {
+    return (
+      <Panel onClose={onClose} title="BOUNTY INSPECTION">
+        <div className="py-20 text-center font-mono text-slate-400">
+          <span className="inline-block animate-spin mr-2">⛏️</span>
+          LOADING BOUNTY DOSSIER #{id}…
+        </div>
+      </Panel>
+    );
+  }
+
+  const f = {
+    ...(row.prediction.features ?? {}),
+    pSuccess: row.prediction.pSuccess,
+    matchScore: row.prediction.matchScore,
+  } as Partial<FeatureRow>;
 
   return (
-    <Panel onClose={onClose} title="Issue detail">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-100">{row.issue.title}</h2>
-          <a className="text-sm text-sky-400 hover:underline" href={row.issue.url} target="_blank" rel="noreferrer">{row.repo.fullName}#{row.issue.number} ↗</a>
-        </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-gold-400">{perHour(row.prediction.evPerHour)}</div>
-          <div className="text-xs uppercase tracking-wide text-slate-500">expected value / hr</div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Bounty" value={money(row.issue.bountyAmount)} tone="text-emerald-300" />
-        <Stat label="P(paid ≤30d)" value={pct(row.prediction.pSuccess)} tone="text-sky-300" />
-        <Stat label="Est. to merge" value={days(row.prediction.daysToMergeEst)} tone="text-slate-200" />
-        <Stat label="Est. hours" value={String(row.prediction.estHours ?? "—")} tone="text-slate-200" />
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {row.issue.labels.map((l) => <span key={l} className="chip bg-white/5 text-slate-300">{l}</span>)}
-      </div>
-
-      {row.issue.body && <p className="mt-4 rounded-lg bg-black/20 p-3 text-sm text-slate-300">{row.issue.body}</p>}
-
-      <div className="mt-5">
-        <h3 className="mb-2 text-sm font-semibold text-slate-200">Why this score</h3>
-        <div className="card p-3"><FeatureBars f={f} /></div>
-        <p className="mt-1 text-xs text-slate-500">Model: <span className="text-slate-300">{row.prediction.modelVersion}</span>. Only anonymous numeric features are used — no code leaves your machine.</p>
-      </div>
-
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <button onClick={track} disabled={busy} className="rounded-lg bg-gold-500 px-4 py-2 font-semibold text-black transition hover:bg-gold-400 disabled:opacity-50">
-          Track this bounty →
-        </button>
-        <button onClick={draftPlan} disabled={busy} className="rounded-lg border border-white/15 px-4 py-2 font-semibold text-slate-200 transition hover:bg-white/5 disabled:opacity-50">
-          Draft plan (local Gemma)
-        </button>
-      </div>
-      {trackMsg && <p className="mt-2 rounded-lg bg-sky-500/10 p-2 text-sm text-sky-200">{trackMsg}</p>}
-      {draft && (
-        <div className="mt-3 rounded-lg border border-dashed border-white/15 bg-black/20 p-3">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide text-slate-500">Draft · dry run · not posted</span>
-            {draftModel && <span className="chip bg-white/5 text-slate-400">{draftModel}</span>}
+    <Panel onClose={onClose} title={`ISSUE DOSSIER · #${row.issue.number}`}>
+      {/* Header Info */}
+      <div className="card p-5 mb-4 border-2 border-slate-700 bg-coal shadow-brutal">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5 font-mono text-xs">
+              <span className="chip-gold !text-[10px] !py-0 !px-1.5">
+                {row.repo.language || "CODE"}
+              </span>
+              <a
+                className="font-bold text-cyber-300 hover:text-white underline"
+                href={row.issue.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {row.repo.fullName}#{row.issue.number} ↗
+              </a>
+              <span className="text-slate-500">★ {row.repo.stars.toLocaleString()}</span>
+            </div>
+            <h2 className="text-xl font-black text-white tracking-tight">{row.issue.title}</h2>
           </div>
-          <p className="whitespace-pre-wrap text-sm text-slate-300">{draft}</p>
+
+          <div className="text-right flex-shrink-0">
+            <div className="font-mono text-2xl sm:text-3xl font-black text-gold-400">
+              {perHour(row.prediction.evPerHour)}
+            </div>
+            <div className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+              EXPECTED VALUE / HR
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4 Core Stat Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-4">
+        <Stat
+          label="Bounty Reward"
+          value={money(row.issue.bountyAmount)}
+          tone="text-acid-400"
+          accent="border-acid-500/80"
+        />
+        <Stat
+          label="P(Paid ≤30d)"
+          value={pct(row.prediction.pSuccess)}
+          tone="text-cyber-300"
+          accent="border-cyber-500/80"
+        />
+        <Stat
+          label="Est. Merge"
+          value={days(row.prediction.daysToMergeEst)}
+          tone="text-slate-200"
+          accent="border-slate-700"
+        />
+        <Stat
+          label="Est. Effort"
+          value={`${row.prediction.estHours ?? 10} hrs`}
+          tone="text-gold-300"
+          accent="border-gold-500/80"
+        />
+      </div>
+
+      {/* Labels */}
+      <div className="card p-3 mb-4 bg-coal/70">
+        <div className="font-mono text-[10px] uppercase font-bold text-slate-400 mb-2">
+          LABELS DETECTED
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {row.issue.labels.map((l) => (
+            <span
+              key={l}
+              className="chip !text-[11px] !py-0.5 border-slate-700 bg-black/60 text-slate-200"
+            >
+              {l}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Issue Description Terminal Box */}
+      {row.issue.body && (
+        <div className="card p-4 mb-4 bg-black/70 border-2 border-slate-800">
+          <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-800">
+            <span className="font-mono text-[10px] uppercase font-bold text-slate-400">
+              ISSUE SPECIFICATION (EXCERPT)
+            </span>
+            <a
+              href={row.issue.url}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-xs text-cyber-400 hover:underline"
+            >
+              Open on GitHub ↗
+            </a>
+          </div>
+          <p className="font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+            {row.issue.body}
+          </p>
+        </div>
+      )}
+
+      {/* Feature Breakdown: Why this score */}
+      <div className="card p-4 mb-5 border-2 border-slate-700 bg-coal shadow-brutal-sm">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-mono text-xs font-black uppercase text-white tracking-wider">
+            PREDICTOR SIGNAL DECOMPOSITION
+          </h3>
+          <span className="chip-cyber !text-[10px] !py-0">
+            {row.prediction.modelVersion}
+          </span>
+        </div>
+        <FeatureBars f={f} />
+        <p className="mt-3 font-mono text-[10px] text-slate-400 border-t border-slate-800 pt-2">
+          🔒 Only anonymous numeric feature rows evaluated. Private source code never leaves your local machine.
+        </p>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="grid gap-3 sm:grid-cols-2 mb-4">
+        <button
+          onClick={track}
+          disabled={busy}
+          className="btn-gold !py-3 text-xs"
+        >
+          {busy ? "COMMITTING…" : "TRACK THIS BOUNTY →"}
+        </button>
+        <button
+          onClick={draftPlan}
+          disabled={busy}
+          className="btn-ghost !py-3 text-xs"
+        >
+          {busy ? "GENERATING…" : "⚡ DRAFT PLAN (LOCAL GEMMA)"}
+        </button>
+      </div>
+
+      {/* Tracking Confirmation Message */}
+      {trackMsg && (
+        <div className="card-accent-acid p-3.5 mb-4 font-mono text-xs flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-base">✅</span>
+            <span className="text-acid-200 font-bold">{trackMsg}</span>
+          </div>
+          {onTrackSuccess && (
+            <button
+              onClick={() => {
+                onTrackSuccess();
+                onClose();
+              }}
+              className="btn-acid !px-2.5 !py-1 text-[11px]"
+            >
+              Go to Tracker →
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* AI Plan Draft Box */}
+      {draft && (
+        <div className="card p-4 border-2 border-gold-500/80 bg-coal shadow-brutal-gold mb-4">
+          <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-800">
+            <div className="flex items-center gap-2 font-mono text-xs">
+              <span className="chip-gold !text-[10px] !py-0">AI DRAFT PLAN</span>
+              <span className="text-slate-400">· DRY-RUN (NEVER AUTO-POSTED)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {draftModel && (
+                <span className="chip !text-[10px] !py-0 border-slate-700 bg-black/60 text-slate-300">
+                  {draftModel}
+                </span>
+              )}
+              <button
+                onClick={handleCopyDraft}
+                className="btn-outline !py-0.5 !px-2 text-[10px]"
+              >
+                {copied ? "COPIED! ✓" : "COPY PLAN"}
+              </button>
+            </div>
+          </div>
+          <div className="font-mono text-xs text-slate-200 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto bg-black/40 p-3 rounded border border-slate-800">
+            {draft}
+          </div>
+          <div className="mt-2 font-mono text-[10px] text-slate-400">
+            Human-in-the-loop: Review, edit, or copy into your local editor or PR description.
+          </div>
         </div>
       )}
     </Panel>
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone: string }): JSX.Element {
+function Stat({
+  label,
+  value,
+  tone,
+  accent,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+  accent: string;
+}): JSX.Element {
   return (
-    <div className="card p-3">
-      <div className={`text-lg font-bold ${tone}`}>{value}</div>
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
+    <div className={`card p-3 bg-coal border-2 ${accent} shadow-brutal-sm`}>
+      <div className={`font-mono text-xl font-black ${tone}`}>{value}</div>
+      <div className="font-mono text-[10px] uppercase tracking-wider text-slate-400 mt-0.5">
+        {label}
+      </div>
     </div>
   );
 }
 
-export function Panel({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }): JSX.Element {
+export function Panel({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}): JSX.Element {
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
-      <div className="h-full w-full max-w-xl overflow-y-auto border-l border-white/10 bg-seam p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs uppercase tracking-wide text-slate-500">{title}</span>
-          <button onClick={onClose} className="rounded-md px-2 py-1 text-slate-400 hover:bg-white/10">✕</button>
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="h-full w-full max-w-2xl overflow-y-auto border-l-4 border-slate-800 bg-seam p-6 shadow-brutal-xl animate-fade-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between border-b-2 border-slate-800 pb-3">
+          <div className="flex items-center gap-2 font-mono text-xs font-black tracking-wider uppercase text-gold-400">
+            <span>⛏️</span>
+            <span>{title}</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded border-2 border-slate-700 bg-coal font-mono text-sm font-bold text-slate-300 shadow-brutal-sm hover:border-white hover:text-white transition"
+          >
+            ✕
+          </button>
         </div>
         {children}
       </div>
